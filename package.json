@@ -1,0 +1,24 @@
+{
+  "name": "lets-mine-asteria",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "create-address": "ts-node src/create-address.ts",
+    "create-ship": "ts-node src/create-ship.ts",
+    "move-ship": "ts-node src/move-ship.ts",
+    "gather-fuel": "ts-node src/gather-fuel.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@meshsdk/core": "^1.9.0-beta.71",
+    "dotenv": "^17.2.1"
+  }
+}
