@@ -145,6 +145,7 @@ async function gatherFuel() {
   );
 
   console.log("✓ Fuel pickup UTxO found:");
+  console.log(JSON.stringify(fuelPickupUtxo, null, 2));
   console.log(`  TxHash: ${fuelPickupUtxo.input.txHash}`);
   console.log(`  Output Index: ${fuelPickupUtxo.input.outputIndex}`);
   console.log(`  Available fuel: ${fuelPickupAmount}`);
@@ -282,6 +283,12 @@ async function gatherFuel() {
 
       // Remaining fuel back to pallet
       .txOut(pelletAddress, [
+        {
+          unit: "lovelace",
+          quantity:
+            fuelPickupUtxo.output.amount.find((a) => a.unit === "lovelace")
+              ?.quantity || "0",
+        },
         {
           unit: fuelPolicy + stringToHex("FUEL"),
           quantity: (fuelPickupAmount - actualFuelToGather).toString(),

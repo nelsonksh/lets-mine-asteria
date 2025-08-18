@@ -11,6 +11,7 @@ import {
   posixTime as createPosixTime,
   stringToHex,
   slotToBeginUnixTime,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 import {
   fuelPolicy,
@@ -117,34 +118,6 @@ export async function moveShip(deltaX: number, deltaY: number) {
 
   console.log(`Parsed current position: (${currentX}, ${currentY})`);
 
-  console.log("=== Ship Timing Validation ===");
-  const validity_range_lower_bound = tipSlot;
-  const validity_range_lower_bound_posix = slotToBeginUnixTime(
-    validity_range_lower_bound,
-    SLOT_CONFIG_NETWORK.mainnet
-  );
-  const validity_range_upper_bound =
-    tipSlot + (maxSpeedTime / 1000) * fuelToBurn;
-
-  console.log(
-    `Last move time: ${lastMoveTime} i.e. ${new Date(
-      lastMoveTime
-    ).toLocaleString()}`
-  );
-  const movementPossibleAfter = lastMoveTime + fuelToBurn * maxSpeedTime;
-  console.log(
-    `Movement possible after: ${movementPossibleAfter} i.e. ${new Date(
-      movementPossibleAfter
-    ).toLocaleString()}`
-  );
-
-  if (movementPossibleAfter > validity_range_lower_bound_posix) {
-    console.error(
-      "❌ Ship timing validation failed! Last move time is too recent."
-    );
-    throw new Error("Ship was moved too recently");
-  }
-  console.log("✓ Ship timing validation passed");
 
   // Calculate new position
   const newX = currentX + deltaX;
@@ -153,7 +126,30 @@ export async function moveShip(deltaX: number, deltaY: number) {
 
   const redeemer = conStr0([integer(deltaX), integer(deltaY)]);
 
-  const last_move_latest_time = Date.now() + maxSpeedTime * fuelToBurn;
+  let last_move_latest_time = lastMoveTime + maxSpeedTime * fuelToBurn;
+  const last_move_time_slot = unixTimeToEnclosingSlot(
+    lastMoveTime,
+    SLOT_CONFIG_NETWORK.mainnet
+  );
+  let validity_range_upper_bound;
+  let validity_range_lower_bound;
+  if (last_move_time_slot + (maxSpeedTime / 1000) * fuelToBurn <= tipSlot) {
+    validity_range_upper_bound = tipSlot + 100;
+    last_move_latest_time = slotToBeginUnixTime(validity_range_upper_bound + 1, SLOT_CONFIG_NETWORK.mainnet);
+    validity_range_lower_bound = last_move_time_slot + 1
+  } else {
+    console.error(
+      `❌ Ship timing validation failed! Last move time is too recent.\n\n`,
+      `can move at: ${new Date(last_move_latest_time).toLocaleString()}\n\n`,
+      `can move 1 step at: ${new Date(lastMoveTime + maxSpeedTime).toLocaleString()}\n\n`,
+      `can move 2 steps at: ${new Date(lastMoveTime + 2 * maxSpeedTime).toLocaleString()}\n\n`,
+      `can move 3 steps at: ${new Date(lastMoveTime + 3 * maxSpeedTime).toLocaleString()}\n\n`,
+      `can move 4 steps at: ${new Date(lastMoveTime + 4 * maxSpeedTime).toLocaleString()}\n\n`,
+      `can move 5 steps at: ${new Date(lastMoveTime + 5 * maxSpeedTime).toLocaleString()}`
+    );
+    throw new Error("Ship was moved too recently");
+  }  
+
   const newDatum = conStr0([
     integer(newX),
     integer(newY),
@@ -163,24 +159,28 @@ export async function moveShip(deltaX: number, deltaY: number) {
   ]);
 
   try {
-    console.log("Building transaction with the following structure:");
-    console.log("1. Inputs:");
-    console.log(
-      `   - Pilot UTxO: ${pilotUtxo.input.txHash}#${pilotUtxo.input.outputIndex}`
-    );
-    console.log(
-      `   - Ship UTxO: ${shipUtxo.input.txHash}#${shipUtxo.input.outputIndex}`
-    );
-    console.log("2. Outputs:");
-    console.log(
-      `   - Ship back to shipyard with remaining fuel: ${remainingFuel}`
-    );
-    console.log(`   - Pilot token back to wallet`);
-    console.log("3. Minting:");
-    console.log(`   - Burning ${fuelToBurn} FUEL tokens`);
-    console.log("4. Reference scripts:");
-    console.log(`   - Spending script: ${refScripts}#1`);
-    console.log(`   - Minting script: ${refScripts}#2`);
+    console.log("Validations:");
+    console.log("1. must_include_pilot_token:");
+    console.log(JSON.stringify(pilotUtxo, null, 2));
+
+    console.log("2. must_spend_one_ship_input:");
+    console.log(JSON.stringify(shipUtxo, null, 2));
+
+    console.log("3. must_respect_max_speed:");
+    console.log((validity_range_upper_bound - validity_range_lower_bound) * 1000, " >= ", maxSpeedTime);
+
+    console.log("4. must_respect_latest_time:");
+    console.log(lastMoveTime, " < ", slotToBeginUnixTime(validity_range_lower_bound, SLOT_CONFIG_NETWORK.mainnet));
+
+    console.log("5. must_have_correct_datum")
+    console.log(JSON.stringify(newDatum, null, 2));
+    console.log(last_move_latest_time, " >= ", slotToBeginUnixTime(validity_range_upper_bound, SLOT_CONFIG_NETWORK.mainnet));
+
+    console.log("6. must_have_correct_value")
+    console.log(`Check ship utxo`)
+
+    console.log("7. must_burn_spent_fuel")
+    console.log(0 - fuelToBurn)
 
     console.log("=== Building Transaction ===");
     const txBuilder = new MeshTxBuilder({
